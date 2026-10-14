@@ -13,8 +13,9 @@
     if (!obj || !obj._geom) return '';
     var labelStr = (obj.label && obj.label.text) ? obj.label.text + ': ' : '';
     if (obj.type === 'point') {
-      return labelStr + 'Point (' + obj._geom.x.toFixed(2) + ', ' + obj._geom.y.toFixed(2) + ')' +
-        (obj.def && obj.def.kind === 'free' ? ' [Free]' : ' [Constrained]');
+      var ptKind = (obj.def && obj.def.kind === 'free') ? ' [Free]' :
+        (obj.def && (obj.def.kind === 'onObject' || obj.def.kind === 'onLine')) ? ' [Semi-constrained]' : ' [Fully-constrained]';
+      return labelStr + 'Point (' + obj._geom.x.toFixed(2) + ', ' + obj._geom.y.toFixed(2) + ')' + ptKind;
     } else if (obj.type === 'line') {
       if (obj.extent === 'segment') {
         var wLen = (obj._geom.P0 && obj._geom.P1) ? vec.dist(obj._geom.P0, obj._geom.P1) : 0;
@@ -42,13 +43,53 @@
     name: 'Peek Properties',
     key: 'q',
     cursor: 'help',
-    defaultPrompt: 'Click or hover over an object to peek its properties in the Info Panel.',
+    defaultPrompt: 'Click or hover over an object to inspect. Drag any label to move it.',
+    draggingLabelObj: null,
+    hoveredLabelObj: null,
 
     onActivate: function () {
+      this.draggingLabelObj = null;
+      this.hoveredLabelObj = null;
       Geo.events.emit('canvas:cursor', 'help');
     },
 
+    onDeactivate: function () {
+      this.draggingLabelObj = null;
+      this.hoveredLabelObj = null;
+    },
+
     onPointerMove: function (screenPt, snapTarget, evt) {
+      if (this.draggingLabelObj) {
+        var dxDelta = screenPt.x - this._startScreenPt.x;
+        var dyDelta = screenPt.y - this._startScreenPt.y;
+        this.draggingLabelObj.label.dx = Math.round(this._startDx + dxDelta);
+        this.draggingLabelObj.label.dy = Math.round(this._startDy + dyDelta);
+        this.draggingLabelObj.label.manual = true;
+        Geo.events.emit('canvas:cursor', 'grabbing');
+        if (Geo.ui && Geo.ui.statusbar) {
+          Geo.ui.statusbar.setPrompt('Moving label "' + (this.draggingLabelObj.label.text || '') + '" (dx: ' + this.draggingLabelObj.label.dx + ', dy: ' + this.draggingLabelObj.label.dy + ')');
+        }
+        Geo.events.emit('canvas:requestRender');
+        return;
+      }
+
+      var hitLabel = (hittest.hitTestLabel) ? hittest.hitTestLabel(screenPt, graph.objects, 5) : null;
+      if (hitLabel) {
+        if (this.hoveredLabelObj !== hitLabel.object) {
+          this.hoveredLabelObj = hitLabel.object;
+          Geo.events.emit('canvas:requestRender');
+        }
+        Geo.events.emit('canvas:cursor', 'grab');
+        if (Geo.ui && Geo.ui.statusbar) {
+          Geo.ui.statusbar.setPrompt('Label "' + (hitLabel.object.label.text || '') + '" — Click & drag to move label');
+        }
+        return;
+      }
+      if (this.hoveredLabelObj) {
+        this.hoveredLabelObj = null;
+        Geo.events.emit('canvas:requestRender');
+      }
+
       var hitObj = (snapTarget && snapTarget.object) || (snapTarget && snapTarget.id ? snapTarget : null);
       if (!hitObj) {
         var hits = hittest.hitTest(screenPt, graph.objects, 8);
@@ -69,6 +110,28 @@
     },
 
     onPointerDown: function (screenPt, snapTarget, evt) {
+      var hitLabel = (hittest.hitTestLabel) ? hittest.hitTestLabel(screenPt, graph.objects, 5) : null;
+      if (hitLabel) {
+        this.draggingLabelObj = hitLabel.object;
+        this.hoveredLabelObj = null;
+        this._startScreenPt = { x: screenPt.x, y: screenPt.y };
+        this._startDx = (hitLabel.object.label.dx !== undefined) ? hitLabel.object.label.dx : 8;
+        this._startDy = (hitLabel.object.label.dy !== undefined) ? hitLabel.object.label.dy : -10;
+        hitLabel.object.label.manual = true;
+
+        Geo.tools.selection.selectOnly(hitLabel.object);
+        if (Geo.ui && Geo.ui.infopanel) {
+          Geo.ui.infopanel.switchTab('properties');
+          Geo.ui.infopanel.update([hitLabel.object]);
+        }
+        Geo.events.emit('canvas:cursor', 'grabbing');
+        if (Geo.ui && Geo.ui.statusbar) {
+          Geo.ui.statusbar.setPrompt('Moving label "' + (hitLabel.object.label.text || '') + '" (Release to set)');
+        }
+        Geo.events.emit('canvas:requestRender');
+        return true;
+      }
+
       var hitObj = (snapTarget && snapTarget.object) || (snapTarget && snapTarget.id ? snapTarget : null);
       if (!hitObj) {
         var hits = hittest.hitTest(screenPt, graph.objects, 8);
@@ -92,6 +155,17 @@
         }
       }
       return true;
+    },
+
+    onPointerUp: function (evt) {
+      if (this.draggingLabelObj) {
+        this.draggingLabelObj = null;
+        Geo.events.emit('history:snapshot');
+        Geo.events.emit('canvas:requestRender');
+        Geo.events.emit('canvas:cursor', 'help');
+        return true;
+      }
+      return false;
     },
 
     onKeyDown: function (evt) {

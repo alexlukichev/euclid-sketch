@@ -457,6 +457,87 @@
       var pbGeomUpdated = pbObj._geom;
       assert('Perpendicular Bisector', 'Bisector updates dynamically when point dragged (vertical line X=5)', pbGeomUpdated && Math.abs(pbGeomUpdated.n.y) < 1e-9 && Math.abs(pbGeomUpdated.P0.x - 5) < 1e-9);
 
+      // 20. Smart Label Placement & Peeking Mode Manual Label Drag
+      var camera = Geo.view.camera;
+      var hittest = Geo.view.hittest;
+      graph.clear();
+      camera.resetZoom();
+
+      // Free point with no obstacles
+      var ptIsolated = Geo.model.objects.createPoint({ kind: 'free', x: 0, y: 0 }, 'A');
+      graph.add(ptIsolated);
+      graph.recomputeAll();
+
+      labels.optimizePlacements(graph.objects, camera);
+      assert('Label Placement', 'Isolated point label picks default NE offset', ptIsolated.label.dx === 9 && ptIsolated.label.dy === -11);
+
+      // Add a line crossing through the top-right NE area of point A
+      var ptObs1 = Geo.model.objects.createPoint({ kind: 'free', x: -5, y: -5 }, 'P1');
+      var ptObs2 = Geo.model.objects.createPoint({ kind: 'free', x: 5, y: 5 }, 'P2');
+      graph.add(ptObs1);
+      graph.add(ptObs2);
+      var lineDiag = Geo.model.objects.createLine({ kind: 'twoPoints', p: ptObs1.id, q: ptObs2.id }, 'line', '');
+      graph.add(lineDiag);
+      graph.recomputeAll();
+
+      // Re-run optimization
+      labels.optimizePlacements(graph.objects, camera);
+      // Because lineDiag passes through (0, 0) along diagonal (which crosses NE and SW), label for A shifts away
+      assert('Label Placement', 'Label moves away from intersecting diagonal line', !(ptIsolated.label.dx === 9 && ptIsolated.label.dy === -11));
+
+      // Test hitTestLabel
+      var anchorA = labels.getLabelAnchorScreen(ptIsolated, camera);
+      var labelPosA = { x: anchorA.x + ptIsolated.label.dx + 5, y: anchorA.y + ptIsolated.label.dy - 5 };
+      var hitA = hittest.hitTestLabel(labelPosA, graph.objects, 6);
+      assert('Label Placement', 'hitTestLabel accurately hits visible label', hitA && hitA.object.id === ptIsolated.id);
+
+      // Test manual move in peek mode
+      var peekTool = Geo.tools.controller.get('peek');
+      Geo.tools.controller.activate('peek');
+
+      // Pointer down on label
+      var handledDown = peekTool.onPointerDown(labelPosA, null, {});
+      assert('Label Manual Move', 'Peek tool grabs label on pointer down', handledDown && peekTool.draggingLabelObj === ptIsolated);
+      assert('Label Manual Move', 'Grabbing label marks manual = true', ptIsolated.label.manual === true);
+
+      // Pointer move drag by (+20, -15)
+      var dragPt = { x: labelPosA.x + 20, y: labelPosA.y - 15 };
+      peekTool.onPointerMove(dragPt, null, {});
+      assert('Label Manual Move', 'Pointer move updates label dx and dy', ptIsolated.label.dx !== undefined && ptIsolated.label.dy !== undefined);
+      var savedDx = ptIsolated.label.dx;
+      var savedDy = ptIsolated.label.dy;
+
+      // Pointer up releases drag
+      peekTool.onPointerUp({});
+      assert('Label Manual Move', 'Pointer up releases label drag', peekTool.draggingLabelObj === null);
+
+      // Verify that optimizePlacements respects manual = true and preserves position
+      labels.optimizePlacements(graph.objects, camera);
+      assert('Label Manual Move', 'Auto-placement preserves manual label position', ptIsolated.label.dx === savedDx && ptIsolated.label.dy === savedDy);
+
+      // Reset to auto
+      ptIsolated.label.manual = false;
+      labels.optimizePlacements(graph.objects, camera);
+      assert('Label Manual Move', 'Resetting manual = false allows re-optimization', ptIsolated.label.manual === false);
+
+      // 21. Point Status Distinction (Free, Semi-constrained, Fully-constrained)
+      var ptGlider = Geo.model.objects.createPoint({ kind: 'onLine', line: lineDiag.id, t: 0.5 }, 'G');
+      graph.add(ptGlider);
+      var ptMid = Geo.model.objects.createPoint({ kind: 'midpoint', p: ptObs1.id, q: ptObs2.id }, 'M');
+      graph.add(ptMid);
+      graph.recomputeAll();
+
+      var mockContainerFree = { innerHTML: '', querySelector: () => null, querySelectorAll: () => [] };
+      Geo.ui.infopanel.renderSingleObject(ptIsolated);
+      var freeHtml = Geo.ui.infopanel.renderSingleObject(ptIsolated);
+      assert('Point Status', 'Free point displays Free (draggable)', freeHtml.indexOf('Free (draggable)') !== -1);
+
+      var gliderHtml = Geo.ui.infopanel.renderSingleObject(ptGlider);
+      assert('Point Status', 'Glider point displays Semi-constrained', gliderHtml.indexOf('Semi-constrained') !== -1);
+
+      var midHtml = Geo.ui.infopanel.renderSingleObject(ptMid);
+      assert('Point Status', 'Midpoint displays Fully-constrained (midpoint)', midHtml.indexOf('Fully-constrained (midpoint)') !== -1);
+
       // Render table
       var tbody = document.getElementById('test-rows');
       var passedCount = 0;

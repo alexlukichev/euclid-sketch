@@ -191,6 +191,9 @@
       }
 
       // 8. Labels
+      if (Geo.model.labels && Geo.model.labels.optimizePlacements) {
+        Geo.model.labels.optimizePlacements(objects, camera);
+      }
       for (var lb = 0; lb < objects.length; lb++) {
         var lObj = objects[lb];
         if (lObj.visible && lObj._geom && lObj.label && lObj.label.visible && lObj.label.text) {
@@ -512,6 +515,25 @@
         ctx.strokeText(parts.sub, subX, subY);
         ctx.fillStyle = textColor;
         ctx.fillText(parts.sub, subX, subY);
+      }
+
+      // Visual indicator when hovering or dragging label in peeking mode
+      var peekTool = (Geo.tools && Geo.tools.controller) ? Geo.tools.controller.get('peek') : null;
+      var isPeeking = Geo.tools && Geo.tools.controller && Geo.tools.controller.activeTool && Geo.tools.controller.activeTool.id === 'peek';
+      if (isPeeking && peekTool && (peekTool.draggingLabelObj === obj || peekTool.hoveredLabelObj === obj)) {
+        var totalW = baseWidth + (parts.sub ? ctx.measureText(parts.sub).width : 0);
+        ctx.save();
+        ctx.strokeStyle = '#2F6FEB';
+        ctx.lineWidth = (peekTool.draggingLabelObj === obj) ? 1.5 : 1;
+        if (peekTool.draggingLabelObj === obj) {
+          ctx.setLineDash([3, 3]);
+          ctx.fillStyle = 'rgba(47, 111, 235, 0.12)';
+          ctx.fillRect(pos.x - 3, pos.y - 14, totalW + 6, 18);
+        } else {
+          ctx.setLineDash([2, 2]);
+        }
+        ctx.strokeRect(pos.x - 3, pos.y - 14, totalW + 6, 18);
+        ctx.restore();
       }
 
       ctx.restore();

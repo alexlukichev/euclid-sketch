@@ -159,6 +159,29 @@
       }
 
       return null;
+    },
+
+    hitTestLabel: function (screenPt, objects, tol) {
+      var t = tol !== undefined ? tol : 4;
+      if (!objects || !screenPt) return null;
+      var labelsModel = Geo.model.labels;
+      if (!labelsModel || !labelsModel.getLabelBoundingBox) return null;
+
+      for (var i = objects.length - 1; i >= 0; i--) {
+        var obj = objects[i];
+        if (!obj.visible || !obj._geom || !obj.label || !obj.label.visible || !obj.label.text) continue;
+        var anchor = labelsModel.getLabelAnchorScreen(obj, camera);
+        if (!anchor) continue;
+        var box = labelsModel.getLabelBoundingBox(obj, anchor, obj.label.dx, obj.label.dy);
+        if (!box) continue;
+        if (screenPt.x >= box.x - t &&
+            screenPt.x <= box.x + box.width + t &&
+            screenPt.y >= box.y - t &&
+            screenPt.y <= box.y + box.height + t) {
+          return { object: obj, box: box };
+        }
+      }
+      return null;
     }
   };
 

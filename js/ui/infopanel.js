@@ -142,6 +142,15 @@
       html.push('    </div>');
       html.push('  </div>');
       html.push('  <div class="label-error-msg" style="display:none; color:var(--danger); font-size:11px; margin-top:2px;"></div>');
+      if (obj.label && obj.label.text) {
+        var posText = obj.label.manual ? 'Label Position: Custom (dx: ' + (obj.label.dx || 0) + ', dy: ' + (obj.label.dy || 0) + ')' : 'Label Position: Auto (least overlap)';
+        html.push('  <div class="label-pos-row" style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-muted); margin-top:5px;">');
+        html.push('    <span>' + posText + '</span>');
+        if (obj.label.manual) {
+          html.push('    <button type="button" class="btn-ghost btn-reset-label-pos" style="font-size:11px; padding:2px 6px;" title="Reset label to automatic placement">Reset to Auto</button>');
+        }
+        html.push('  </div>');
+      }
       html.push('</div>');
 
       // Geometry & Dimensions
@@ -151,11 +160,35 @@
 
       if (obj.type === 'point' && geom) {
         var isFree = obj.def && obj.def.kind === 'free';
+        var isOnObj = obj.def && (obj.def.kind === 'onObject' || obj.def.kind === 'onLine');
+        var statusText;
+        if (isFree) {
+          statusText = 'Free (draggable)';
+        } else if (isOnObj) {
+          var targetObj = graph.get(obj.def.obj || obj.def.line);
+          var targetName = (targetObj && targetObj.label && targetObj.label.text) ?
+            targetObj.label.text : (targetObj ? targetObj.type : 'object');
+          statusText = 'Semi-constrained (glider on ' + targetName + ')';
+        } else {
+          var kindDesc = '';
+          if (obj.def) {
+            if (obj.def.kind === 'intersection') kindDesc = 'intersection';
+            else if (obj.def.kind === 'midpoint') kindDesc = 'midpoint';
+            else if (obj.def.kind === 'center') kindDesc = 'circle center';
+            else if (obj.def.kind === 'foot') kindDesc = 'altitude foot';
+            else if (obj.def.kind === 'pole') kindDesc = 'pole';
+            else if (obj.def.kind === 'rectCorner') kindDesc = 'rectangle corner';
+            else if (obj.def.kind === 'angleArm') kindDesc = 'angle arm';
+            else if (obj.def.kind === 'offsetOnLine') kindDesc = 'fixed length offset';
+            else kindDesc = obj.def.kind;
+          }
+          statusText = kindDesc ? ('Fully-constrained (' + kindDesc + ')') : 'Fully-constrained';
+        }
         var refX = measure.worldToRefUnits(geom.x, graph.objectsById);
         var refY = measure.worldToRefUnits(geom.y, graph.objectsById);
         html.push('    <div class="grid-row"><span>X:</span><strong>' + (refX !== null ? measure.formatDistance(refX) : geom.x.toFixed(2)) + '</strong></div>');
         html.push('    <div class="grid-row"><span>Y:</span><strong>' + (refY !== null ? measure.formatDistance(refY) : geom.y.toFixed(2)) + '</strong></div>');
-        html.push('    <div class="grid-row"><span>Status:</span><span>' + (isFree ? 'Free (draggable)' : 'Constrained') + '</span></div>');
+        html.push('    <div class="grid-row"><span>Status:</span><span>' + statusText + '</span></div>');
       } else if (obj.type === 'line' && geom) {
         var fP = (obj.def && obj.def.firstP) || (obj.def && obj.def.p);
         var fQ = (obj.def && obj.def.firstQ) || (obj.def && obj.def.q);
@@ -318,6 +351,19 @@
         };
         labelInput.onchange = function () {
           Geo.events.emit('history:snapshot');
+        };
+      }
+
+      var resetPosBtn = container.querySelector('.btn-reset-label-pos');
+      if (resetPosBtn) {
+        resetPosBtn.onclick = function () {
+          obj.label.manual = false;
+          if (Geo.model.labels && Geo.model.labels.optimizePlacements) {
+            Geo.model.labels.optimizePlacements(graph.objects, Geo.view.camera);
+          }
+          self.update([obj]);
+          Geo.events.emit('history:snapshot');
+          Geo.events.emit('canvas:requestRender');
         };
       }
 
