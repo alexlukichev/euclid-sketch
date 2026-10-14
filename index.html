@@ -12,9 +12,12 @@
     <header id="top-bar">
       <div class="top-bar-left">
         <div class="app-brand">
-          <svg class="brand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M12 3v6M12 12l5 5M12 12l-4 4"/>
+          <svg class="brand-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 1.5v2.5"/>
+            <circle cx="12" cy="6" r="2"/>
+            <path d="M10.5 7.8L5.5 21.5"/>
+            <path d="M13.5 7.8L18.5 21.5"/>
+            <path d="M8.2 15a5.5 5.5 0 0 0 7.6 0"/>
           </svg>
           <span>Euclid Sketch</span>
         </div>
@@ -27,8 +30,8 @@
       </div>
 
       <div class="top-bar-center">
-        <button id="btn-undo" class="btn-ghost" title="Undo (Ctrl+Z / ⌘Z)">↶</button>
-        <button id="btn-redo" class="btn-ghost" title="Redo (Ctrl+Y / ⌘Y / ⌘⇧Z)">↷</button>
+        <button id="btn-undo" class="btn-ghost" title="Undo (Ctrl+Z / ⌘Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"/></svg></button>
+        <button id="btn-redo" class="btn-ghost" title="Redo (Ctrl+Y / ⌘Y / ⌘⇧Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13"/></svg></button>
       </div>
 
       <div class="top-bar-right">
@@ -37,7 +40,7 @@
         <button id="btn-zoom-out" class="btn-ghost" title="Zoom Out">−</button>
         <button id="btn-zoom-reset" class="btn-ghost" title="Reset Zoom">100%</button>
         <button id="btn-zoom-in" class="btn-ghost" title="Zoom In">+</button>
-        <button id="btn-zoom-fit" class="btn-ghost" title="Zoom to Fit">⤢</button>
+        <button id="btn-zoom-fit" class="btn-ghost" title="Zoom to Fit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></button>
         <button id="btn-theme-toggle" class="btn-ghost" title="Toggle Light/Dark Theme">◐</button>
         <button id="btn-help" class="btn-ghost" title="Keyboard Shortcuts">?</button>
       </div>

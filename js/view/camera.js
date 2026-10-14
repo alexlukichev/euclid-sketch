@@ -127,4 +127,18 @@
 
   Geo.view.Camera = Camera;
   Geo.view.camera = new Camera();
+
+  // Computes adaptive 1-2-5 grid step in world units (aims for ~50 screen pixels between dots)
+  Geo.view.getGridStep = function (scale) {
+    var targetScreenStep = 50;
+    var rawStep = targetScreenStep / (scale || 100);
+    var exp = Math.floor(Math.log10(rawStep));
+    var frac = rawStep / Math.pow(10, exp);
+    var step;
+    if (frac <= 1.5) step = 1 * Math.pow(10, exp);
+    else if (frac <= 3.5) step = 2 * Math.pow(10, exp);
+    else if (frac <= 7.5) step = 5 * Math.pow(10, exp);
+    else step = 10 * Math.pow(10, exp);
+    return step;
+  };
 })(window.Geo);

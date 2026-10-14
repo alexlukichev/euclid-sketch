@@ -93,28 +93,70 @@
 
     drawGrid: function (isDark) {
       var ctx = this.ctx;
-      var dotColor = isDark ? '#262C35' : '#DADEE4';
+
+      // Calculate a clean 1-2-5 world step so dots are comfortably spaced (40px to 90px on screen)
+      var step = Geo.view.getGridStep ? Geo.view.getGridStep(camera.scale) : 1;
+
+      // High-contrast, clean colors for both light and dark themes
+      var dotColor = isDark ? 'rgba(255, 255, 255, 0.28)' : 'rgba(30, 41, 59, 0.24)';
+      var originColor = isDark ? 'rgba(91, 141, 239, 0.70)' : 'rgba(47, 111, 235, 0.65)';
+      var axisColor = isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.08)';
+
+      var p0 = camera.screenToWorld({ x: 0, y: camera.height });
+      var p1 = camera.screenToWorld({ x: camera.width, y: 0 });
+
+      var minWorldX = Math.min(p0.x, p1.x);
+      var maxWorldX = Math.max(p0.x, p1.x);
+      var minWorldY = Math.min(p0.y, p1.y);
+      var maxWorldY = Math.max(p0.y, p1.y);
+
+      var minX = Math.floor(minWorldX / step) * step;
+      var maxX = Math.ceil(maxWorldX / step) * step;
+      var minY = Math.floor(minWorldY / step) * step;
+      var maxY = Math.ceil(maxWorldY / step) * step;
+
+      // Draw subtle Cartesian axes (X = 0 and Y = 0)
+      var originScreen = camera.worldToScreen({ x: 0, y: 0 });
+      ctx.strokeStyle = axisColor;
+      ctx.lineWidth = 1;
+      if (originScreen.x >= 0 && originScreen.x <= camera.width) {
+        ctx.beginPath();
+        ctx.moveTo(originScreen.x, 0);
+        ctx.lineTo(originScreen.x, camera.height);
+        ctx.stroke();
+      }
+      if (originScreen.y >= 0 && originScreen.y <= camera.height) {
+        ctx.beginPath();
+        ctx.moveTo(0, originScreen.y);
+        ctx.lineTo(camera.width, originScreen.y);
+        ctx.stroke();
+      }
+
+      // Draw grid dots
+      var countX = Math.round((maxX - minX) / step);
+      var countY = Math.round((maxY - minY) / step);
+      if (countX > 250) countX = 250;
+      if (countY > 250) countY = 250;
+
       ctx.fillStyle = dotColor;
-
-      var step = 1; // 1 world unit
-      var screenStep = camera.scale * step;
-      while (screenStep < 24) screenStep *= 2;
-      while (screenStep > 96) screenStep /= 2;
-
-      var startWorld = camera.screenToWorld({ x: 0, y: camera.height });
-      var endWorld = camera.screenToWorld({ x: camera.width, y: 0 });
-
-      var minX = Math.floor(startWorld.x);
-      var maxX = Math.ceil(endWorld.x);
-      var minY = Math.floor(startWorld.y);
-      var maxY = Math.ceil(endWorld.y);
-
-      for (var x = minX; x <= maxX; x++) {
-        for (var y = minY; y <= maxY; y++) {
+      for (var i = 0; i <= countX; i++) {
+        var x = minX + i * step;
+        for (var j = 0; j <= countY; j++) {
+          var y = minY + j * step;
           var sp = camera.worldToScreen({ x: x, y: y });
+          if (sp.x < -4 || sp.x > camera.width + 4 || sp.y < -4 || sp.y > camera.height + 4) continue;
+
+          var isOrigin = Math.abs(x) < step * 0.1 && Math.abs(y) < step * 0.1;
           ctx.beginPath();
-          ctx.arc(sp.x, sp.y, 1.25, 0, Math.PI * 2);
-          ctx.fill();
+          if (isOrigin) {
+            ctx.fillStyle = originColor;
+            ctx.arc(sp.x, sp.y, 2.75, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = dotColor;
+          } else {
+            ctx.arc(sp.x, sp.y, 1.75, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
     },
@@ -207,7 +249,7 @@
       }
 
       // 10. Snap indicator
-      if (snapTarget && snapTarget.screenPt) {
+      if (snapTarget && snapTarget.screenPt && snapTarget.kind !== 'free') {
         this.drawSnapIndicator(snapTarget);
       }
 
@@ -777,6 +819,8 @@
     },
 
     drawSnapIndicator: function (snapTarget) {
+      if (!snapTarget || snapTarget.kind === 'free' || !snapTarget.screenPt) return;
+
       var ctx = this.ctx;
       var sP = snapTarget.screenPt;
       ctx.save();
@@ -788,7 +832,7 @@
       ctx.arc(sP.x, sP.y, 8, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Inner dot or cross
+      // Inner dot or cross or grid square
       if (snapTarget.kind === 'intersection') {
         var sz = 4;
         ctx.beginPath();
@@ -797,6 +841,10 @@
         ctx.moveTo(sP.x + sz, sP.y - sz);
         ctx.lineTo(sP.x - sz, sP.y + sz);
         ctx.stroke();
+      } else if (snapTarget.kind === 'grid') {
+        var gsz = 3;
+        ctx.beginPath();
+        ctx.strokeRect(sP.x - gsz, sP.y - gsz, gsz * 2, gsz * 2);
       } else {
         ctx.fillStyle = '#2F6FEB';
         ctx.beginPath();

@@ -607,6 +607,17 @@ button {
   padding: 6px 8px;
   font-size: 13px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.btn-ghost svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+  display: block;
 }
 
 .btn-ghost:hover {

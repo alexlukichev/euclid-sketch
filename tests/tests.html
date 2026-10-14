@@ -538,6 +538,29 @@
       var midHtml = Geo.ui.infopanel.renderSingleObject(ptMid);
       assert('Point Status', 'Midpoint displays Fully-constrained (midpoint)', midHtml.indexOf('Fully-constrained (midpoint)') !== -1);
 
+      // 22. Grid Snapping
+      assert('Grid Snap', 'Geo.view.getGridStep returns numeric step', typeof Geo.view.getGridStep === 'function' && Geo.view.getGridStep(100) > 0);
+      var mockPainter = { showGrid: true };
+      Geo.view.mainPainter = mockPainter;
+      var stepVal = Geo.view.getGridStep(camera.scale);
+      // Screen point slightly offset from a grid dot at (1 * stepVal, 2 * stepVal)
+      var targetWorld = { x: stepVal, y: 2 * stepVal };
+      var exactScreen = camera.worldToScreen(targetWorld);
+      var nearScreen = { x: exactScreen.x + 3, y: exactScreen.y - 2 }; // 3.6px away (within 12px snap radius)
+      var snapTargetGrid = Geo.view.snap.findSnap(nearScreen, graph.objects, true);
+      assert('Grid Snap', 'Snaps to grid when cursor is within radius', snapTargetGrid.kind === 'grid');
+      assert('Grid Snap', 'Snapped coordinates match grid point exactly', Math.abs(snapTargetGrid.point.x - targetWorld.x) < 1e-6 && Math.abs(snapTargetGrid.point.y - targetWorld.y) < 1e-6);
+
+      // Far away screen point should not snap to grid
+      var farScreen = { x: exactScreen.x + 25, y: exactScreen.y + 25 }; // 35px away
+      var snapTargetFree = Geo.view.snap.findSnap(farScreen, [], true);
+      assert('Grid Snap', 'Returns free when cursor is far from any grid dot', snapTargetFree.kind === 'free');
+
+      // When grid is off, should not snap to grid
+      mockPainter.showGrid = false;
+      var snapTargetOff = Geo.view.snap.findSnap(nearScreen, graph.objects, true);
+      assert('Grid Snap', 'Does not snap to grid when showGrid is false', snapTargetOff.kind === 'free');
+
       // Render table
       var tbody = document.getElementById('test-rows');
       var passedCount = 0;

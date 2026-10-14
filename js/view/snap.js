@@ -175,7 +175,35 @@
           }
         }
       }
+      // 5. Grid snap (when grid is active and visible)
+      var bestGrid = null;
+      var showGrid = Geo.view.mainPainter && Geo.view.mainPainter.showGrid;
+      if (showGrid) {
+        var radiusGrid = 12;
+        var step = Geo.view.getGridStep ? Geo.view.getGridStep(camera.scale) : 1;
+        var gx = Math.round(worldPt.x / step) * step;
+        var gy = Math.round(worldPt.y / step) * step;
+        gx = Number(gx.toFixed(8));
+        gy = Number(gy.toFixed(8));
+        var sG = camera.worldToScreen({ x: gx, y: gy });
+        var dG = vec.dist(screenPt, sG);
+        if (dG <= radiusGrid) {
+          var precision = Math.max(0, -Math.floor(Math.log10(step)));
+          bestGrid = {
+            kind: 'grid',
+            point: { x: gx, y: gy },
+            screenPt: sG,
+            dist: dG,
+            tooltip: 'Grid (' + gx.toFixed(precision) + ', ' + gy.toFixed(precision) + ')'
+          };
+        }
+      }
+
+      if (bestCurve && bestGrid) {
+        return bestGrid.dist <= bestCurveDist ? bestGrid : bestCurve;
+      }
       if (bestCurve) return bestCurve;
+      if (bestGrid) return bestGrid;
 
       // Default: free point at cursor
       return {
