@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Euclid Sketch — Unit Test Suite</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; background: #fafafa; color: #222; }
+    h1 { font-size: 20px; margin-bottom: 16px; }
+    .test-summary { font-size: 15px; margin-bottom: 20px; font-weight: 600; }
+    .passed-badge { color: #1e8e3e; }
+    .failed-badge { color: #d3352b; }
+    table { width: 100%; border-collapse: collapse; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #eee; font-size: 13px; }
+    th { background: #f5f5f5; font-weight: 600; }
+    .status-pass { color: #1e8e3e; font-weight: 600; }
+    .status-fail { color: #d3352b; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <h1>Euclid Sketch — Unit Test Suite</h1>
+  <div id="summary" class="test-summary">Running tests...</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40px;">#</th>
+        <th>Category</th>
+        <th>Test Description</th>
+        <th style="width: 80px;">Status</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody id="test-rows"></tbody>
+  </table>
+
+  <!-- Load all core modules -->
+  <script src="../js/geo.js"></script>
+  <script src="../js/kernel/vec.js"></script>
+  <script src="../js/kernel/primitives.js"></script>
+  <script src="../js/kernel/intersect.js"></script>
+  <script src="../js/kernel/circles.js"></script>
+  <script src="../js/kernel/polar.js"></script>
+  <script src="../js/model/labels.js"></script>
+  <script src="../js/model/objects.js"></script>
+  <script src="../js/model/measure.js"></script>
+  <script src="../js/model/graph.js"></script>
+  <script src="../js/view/camera.js"></script>
+  <script src="../js/view/hittest.js"></script>
+  <script src="../js/view/snap.js"></script>
+  <script src="../js/view/painter-canvas.js"></script>
+  <script src="../js/tools/tool-base.js"></script>
+  <script src="../js/tools/select.js"></script>
+  <script src="../js/tools/peek.js"></script>
+  <script src="../js/tools/primitives.js"></script>
+  <script src="../js/tools/circles.js"></script>
+  <script src="../js/tools/constructions.js"></script>
+  <script src="../js/ui/infopanel.js"></script>
+  <script src="../js/ui/statusbar.js"></script>
+  <script src="../js/ui/toolbar.js"></script>
+  <script src="../js/history.js"></script>
+
+  <script>
+    (function () {
+      var results = [];
+      function assert(category, name, condition, details) {
+        results.push({
+          category: category,
+          name: name,
+          passed: !!condition,
+          details: details || ''
+        });
+      }
+
+      var vec = Geo.kernel.vec;
+      var prim = Geo.kernel.primitives;
+      var inter = Geo.kernel.intersect;
+      var circ = Geo.kernel.circles;
+      var polar = Geo.kernel.polar;
+      var labels = Geo.model.labels;
+      var graph = Geo.model.graph;
+      var measure = Geo.model.measure;
+
+      // 1. Vector Operations
+      assert('Vector', 'vec.add', vec.equals(vec.add({x: 1, y: 2}, {x: 3, y: 4}), {x: 4, y: 6}));
+      assert('Vector', 'vec.sub', vec.equals(vec.sub({x: 5, y: 5}, {x: 2, y: 1}), {x: 3, y: 4}));
+      assert('Vector', 'vec.len', Math.abs(vec.len({x: 3, y: 4}) - 5) < 1e-9);
+      assert('Vector', 'vec.dist', Math.abs(vec.dist({x: 0, y: 0}, {x: 6, y: 8}) - 10) < 1e-9);
+      assert('Vector', 'vec.perp', vec.equals(vec.perp({x: 1, y: 0}), {x: 0, y: 1}));
+
+      // 2. Primitives & Lines
+      var l1 = prim.createLineFromTwoPoints({x: 0, y: 0}, {x: 10, y: 0});
+      assert('Primitives', 'Horizontal line created', l1 && Math.abs(l1.n.x) < 1e-9 && Math.abs(l1.n.y - 1) < 1e-9);
+      var proj = prim.projectPointToLine({x: 5, y: 7}, l1);
+      assert('Primitives', 'Project point to line', vec.equals(proj, {x: 5, y: 0}));
+      var distL = prim.distPointToLine({x: 5, y: 7}, l1);
+      assert('Primitives', 'Distance point to line', Math.abs(distL - 7) < 1e-9);
+
+      // Circumcircle of equilateral/right triangle
+      var cc = prim.circumcircle({x: 0, y: 0}, {x: 6, y: 0}, {x: 0, y: 8});
+      assert('Primitives', 'Circumcircle right triangle', cc && vec.equals(cc.O, {x: 3, y: 4}) && Math.abs(cc.r - 5) < 1e-9);
+
+      // 3. Intersections (Carrier Line Semantics)
+      var lineA = prim.createLineFromTwoPoints({x: 0, y: 0}, {x: 10, y: 10});
+      var lineB = prim.createLineFromTwoPoints({x: 0, y: 10}, {x: 10, y: 0});
+      var pLL = inter.lineLine(lineA, lineB);
+      assert('Intersect', 'Line-Line intersection', pLL && vec.equals(pLL, {x: 5, y: 5}));
+
+      var circleA = { O: {x: 0, y: 0}, r: 5 };
+      var lineSecant = prim.createLineFromTwoPoints({x: -10, y: 3}, {x: 10, y: 3});
+      var ptsLC = inter.lineCircle(lineSecant, circleA);
+      assert('Intersect', 'Line-Circle 2 points', ptsLC.length === 2 && Math.abs(ptsLC[0].x - (-4)) < 1e-9 && Math.abs(ptsLC[1].x - 4) < 1e-9);
+
+      var circleB = { O: {x: 6, y: 0}, r: 5 };
+      var ptsCC = inter.circleCircle(circleA, circleB);
+      assert('Intersect', 'Circle-Circle 2 points', ptsCC.length === 2 && Math.abs(ptsCC[0].x - 3) < 1e-9 && Math.abs(Math.abs(ptsCC[0].y) - 4) < 1e-9);
+
+      // 4. Pole & Polar
+      var circleUnit = { O: {x: 0, y: 0}, r: 2 };
+      var polarL = polar.polarOfPoint({x: 4, y: 0}, circleUnit);
+      assert('Polar', 'Polar line of point outside circle', polarL && Math.abs(polarL.c - 1) < 1e-9);
+      var poleP = polar.poleOfLine(polarL, circleUnit);
+      assert('Polar', 'Pole of polar line returns original point', poleP && vec.equals(poleP, {x: 4, y: 0}));
+
+      // 5. Apollonius Tangent Circles (LLL)
+      var lineT1 = prim.createLineFromTwoPoints({x: -10, y: 0}, {x: 10, y: 0});
+      var lineT2 = prim.createLineFromTwoPoints({x: 0, y: -10}, {x: 0, y: 10});
+      var lineT3 = prim.createLineFromTwoPoints({x: 10, y: 0}, {x: 0, y: 10});
+      var solsLLL = circ.tangent3Lines(lineT1, lineT2, lineT3);
+      assert('Apollonius', 'Tangent to 3 lines (LLL) finds incircle', solsLLL.length >= 1 && solsLLL[0].circle.r > 0);
+
+      // 6. Labels & Grammars
+      assert('Labels', 'Valid point label A', labels.isValid('point', 'A'));
+      assert('Labels', 'Valid point subscript A_1', labels.isValid('point', 'A_1'));
+      assert('Labels', 'Auto-normalize A1 to A_1', labels.normalizeInput('point', 'A1') === 'A_1');
+      assert('Labels', 'Valid line Greek label α', labels.isValid('line', 'α'));
+      assert('Labels', 'Valid line subscript a_1', labels.isValid('line', 'a_1'));
+      assert('Labels', 'Auto-normalize alpha2 to α_2', labels.normalizeInput('line', 'alpha2') === 'α_2');
+      assert('Labels', 'Valid circle label c_1', labels.isValid('circle', 'c_1'));
+      assert('Labels', 'Valid angle label θ', labels.isValid('angle', 'θ'));
+
+      // 7. Graph Dependency & Recomputation
+      graph.clear();
+      var pFree1 = Geo.model.objects.createPoint({ kind: 'free', x: 0, y: 0 }, 'A');
+      var pFree2 = Geo.model.objects.createPoint({ kind: 'free', x: 10, y: 0 }, 'B');
+      graph.add(pFree1);
+      graph.add(pFree2);
+      var segAB = Geo.model.objects.createLine({ kind: 'twoPoints', p: pFree1.id, q: pFree2.id }, 'segment');
+      graph.add(segAB);
+      var midM = Geo.model.objects.createPoint({ kind: 'midpoint', seg: segAB.id }, 'M');
+      graph.add(midM);
+
+      assert('Graph', 'Midpoint initial computed', midM._geom && vec.equals(midM._geom, {x: 5, y: 0}));
+
+      // Move free point A
+      pFree1.def.x = 2;
+      graph.recomputeAll();
+      assert('Graph', 'Midpoint updates after dragging point A', midM._geom && vec.equals(midM._geom, {x: 6, y: 0}));
+
+      // 8. Reference Segment Measurement
+      measure.setReference(segAB.id, 10, 'cm');
+      var measuredLen = measure.worldToRefUnits(8, graph.objectsById); // segAB is currently from (2,0) to (10,0), length 8
+      assert('Measure', 'Reference unit conversion', measuredLen !== null && Math.abs(measuredLen - 10) < 1e-9);
+
+      // 9. Circle by 3 Tangent Lines Tool
+      var c3lTool = Geo.tools.controller.get('circle_3l');
+      assert('Tools', 'Circle 3L tool registered', c3lTool && c3lTool.id === 'circle_3l' && c3lTool.steps.length === 3);
+      var testL1 = prim.createLineFromTwoPoints({x: 0, y: 0}, {x: 6, y: 0});
+      var testL2 = prim.createLineFromTwoPoints({x: 0, y: 0}, {x: 0, y: 8});
+      var testL3 = prim.createLineFromTwoPoints({x: 6, y: 0}, {x: 0, y: 8});
+      var all4Sols = circ.tangent3Lines(testL1, testL2, testL3);
+      assert('Apollonius', 'Tangent to 3 lines finds all 4 circles (1 incircle + 3 excircles)', all4Sols.length === 4);
+      Geo.tools.controller.candidateSolutions = all4Sols;
+      var branchNearIncenter = Geo.tools.controller._findCandidateBranchAtPoint({x: 2, y: 2});
+      assert('Apollonius', 'Area of plane click selects closest circle', all4Sols.some(function(s) { return s.branch === branchNearIncenter && Math.abs(s.circle.r - 2) < 1e-5; }));
+      Geo.tools.controller.candidateSolutions = null;
+
+      // 10. Delete Tool
+      var delTool = Geo.tools.controller.get('delete');
+      assert('Tools', 'Delete tool registered', delTool && delTool.id === 'delete' && delTool.key === 'x');
+      var tempPt = Geo.model.objects.createPoint({ kind: 'free', x: 99, y: 99 }, 'Temp');
+      graph.add(tempPt);
+      var preCount = graph.objects.length;
+      graph.remove(tempPt.id);
+      assert('Tools', 'Delete tool object removal', graph.objects.length === preCount - 1);
+
+      // 11. History Undo / Redo
+      var hist = Geo.history;
+      hist.undoStack = [];
+      hist.redoStack = [];
+      hist.snapshot(); // baseline
+      var histPt = Geo.model.objects.createPoint({ kind: 'free', x: 1, y: 1 }, 'H1');
+      graph.add(histPt);
+      hist.snapshot();
+      assert('History', 'Can undo after modification', hist.canUndo());
+      hist.undo();
+      assert('History', 'Undo restores previous state', !graph.get(histPt.id));
+      assert('History', 'Can redo undone action', hist.canRedo());
+      hist.redo();
+      assert('History', 'Redo restores modified state', !!graph.get(histPt.id));
+
+      // 12. Move Points Tool Click-to-Grab and Click-to-Release
+      var selectTool = Geo.tools.controller.get('select');
+      assert('Move Points', 'Tool is named Move points', selectTool && selectTool.name === 'Move points');
+      Geo.tools.selection.grabbedPoint = histPt;
+      Geo.tools.selection.originalDef = { kind: 'free', x: 1, y: 1 };
+      selectTool.onPointerMove({ x: 100, y: 100 }, null, {});
+      assert('Interaction', 'Grabbed point tracks pointer', Geo.tools.selection.grabbedPoint === histPt);
+      selectTool.onPointerDown({ x: 100, y: 100 }, null, {}); // 2nd click releases
+      assert('Interaction', '2nd click releases grabbed point without error', Geo.tools.selection.grabbedPoint === null);
+
+      // Status Bar
+      assert('StatusBar', 'statusbar.setPrompt is a function', typeof Geo.ui.statusbar.setPrompt === 'function');
+      Geo.ui.statusbar.setPrompt('Test prompt message');
+      assert('StatusBar', 'statusbar.setPrompt executes cleanly', true);
+
+      // 13. Peek Tool & InfoPanel Properties Display
+      var peekTool = Geo.tools.controller.get('peek');
+      assert('Peek Tool', 'Peek tool is registered', !!peekTool);
+      assert('Peek Tool', 'Peek tool has cursor help/pointer', peekTool && (peekTool.cursor === 'help' || peekTool.cursor === 'pointer'));
+      Geo.tools.controller.resetToSelect();
+      assert('Peek Tool', 'Default tool on reset is peek', Geo.tools.controller.activeTool && Geo.tools.controller.activeTool.id === 'peek');
+
+      var pSegA = Geo.model.objects.createPoint({ kind: 'free', x: 0, y: 0 }, 'PA');
+      var pSegB = Geo.model.objects.createPoint({ kind: 'free', x: 3, y: 4 }, 'PB');
+      graph.add(pSegA);
+      graph.add(pSegB);
+      var testSeg = Geo.model.objects.createLine({ kind: 'twoPoints', p: pSegA.id, q: pSegB.id }, 'segment', 's1');
+      var testLine = Geo.model.objects.createLine({ kind: 'twoPoints', p: pSegA.id, q: pSegB.id }, 'line', 'l1');
+      graph.add(testSeg);
+      graph.add(testLine);
+      graph.recomputeAll();
+
+      var segHtml = Geo.ui.infopanel.renderSingleObject(testSeg);
+      assert('InfoPanel', 'Segment properties render without error', typeof segHtml === 'string' && segHtml.indexOf('Length:') !== -1);
+      assert('InfoPanel', 'Segment properties include endpoints and midpoint', segHtml.indexOf('Endpoints:') !== -1 && segHtml.indexOf('Midpoint:') !== -1);
+
+      var lineHtml = Geo.ui.infopanel.renderSingleObject(testLine);
+      assert('InfoPanel', 'Line properties render without error', typeof lineHtml === 'string' && lineHtml.indexOf('Normal eq:') !== -1);
+
+      // Test peek click selects without moving
+      peekTool.onPointerDown({ x: 0, y: 0 }, testSeg, {});
+      assert('Peek Tool', 'Clicking with peek tool selects target object', !!Geo.tools.selection.selectedIds[testSeg.id]);
+      assert('Peek Tool', 'Clicking with peek tool does not grab points', Geo.tools.selection.grabbedPoint === null);
+
+      // Activating Move points clears non-point selection and ignores clicks on lines
+      Geo.tools.controller.activate('select');
+      assert('Move Points', 'Activating Move points clears non-point selection', !Geo.tools.selection.selectedIds[testSeg.id]);
+      var midSegScreen = Geo.view.camera.worldToScreen({ x: 1.5, y: 2 });
+      selectTool.onPointerDown(midSegScreen, null, {});
+      assert('Move Points', 'Clicking a segment in Move points mode does not select it', !Geo.tools.selection.selectedIds[testSeg.id]);
+
+      // 14. Segment-to-Ray Options & Reversal
+      assert('InfoPanel', 'Extent dropdown is removed from segment properties', segHtml.indexOf('select-extent') === -1);
+      assert('Ray Options', 'Segment quick actions include Ray PA->PB option', segHtml.indexOf('Ray (PA → PB)') !== -1);
+      assert('Ray Options', 'Segment quick actions include Ray PB->PA option', segHtml.indexOf('Ray (PB → PA)') !== -1);
+
+      // Convert to Ray starting at PA
+      testSeg.extent = 'ray';
+      testSeg.def.p = pSegA.id;
+      testSeg.def.q = pSegB.id;
+      graph.recomputeAll();
+      assert('Ray Options', 'Ray A starts at PA', vec.dist(testSeg._geom.P0, { x: 0, y: 0 }) < 1e-9);
+
+      // Flip Ray to start at PB
+      testSeg.def.p = pSegB.id;
+      testSeg.def.q = pSegA.id;
+      graph.recomputeAll();
+      assert('Ray Options', 'Ray B starts at PB', vec.dist(testSeg._geom.P0, { x: 3, y: 4 }) < 1e-9);
+
+      // 15. Intersection Tool Tangent vs Secant
+      var lineTan = prim.createLineFromTwoPoints({x: -10, y: 5}, {x: 10, y: 5});
+      var ptsTan = inter.lineCircle(lineTan, circleA);
+      assert('Intersect', 'Line-Circle tangent returns exactly 1 point', ptsTan.length === 1 && Math.abs(ptsTan[0].x) < 1e-6 && Math.abs(ptsTan[0].y - 5) < 1e-6);
+
+      var circleTanB = { O: {x: 10, y: 0}, r: 5 };
+      var ptsTanCC = inter.circleCircle(circleA, circleTanB);
+      assert('Intersect', 'Circle-Circle tangent returns exactly 1 point', ptsTanCC.length === 1 && Math.abs(ptsTanCC[0].x - 5) < 1e-6 && Math.abs(ptsTanCC[0].y) < 1e-6);
+
+      // Tangent intersection tool creates exactly 1 point
+      var pTanLineA = Geo.model.objects.createPoint({ kind: 'free', x: -10, y: 5 }, 'TLA');
+      var pTanLineB = Geo.model.objects.createPoint({ kind: 'free', x: 10, y: 5 }, 'TLB');
+      var pCircO = Geo.model.objects.createPoint({ kind: 'free', x: 0, y: 0 }, 'TO');
+      var pCircR = Geo.model.objects.createPoint({ kind: 'free', x: 5, y: 0 }, 'TR');
+      graph.add(pTanLineA);
+      graph.add(pTanLineB);
+      graph.add(pCircO);
+      graph.add(pCircR);
+
+      var tanLineObj = Geo.model.objects.createLine({ kind: 'twoPoints', p: pTanLineA.id, q: pTanLineB.id }, 'line', 'lt');
+      var tanCircObj = Geo.model.objects.createCircle({ kind: 'centerPoint', center: pCircO.id, p: pCircR.id }, 'ct');
+      graph.add(tanLineObj);
+      graph.add(tanCircObj);
+      graph.recomputeAll();
+
+      var countBeforeTan = graph.objects.length;
+      var intersectTool = Geo.tools.controller.get('intersection');
+      intersectTool.commit([tanLineObj, tanCircObj]);
+      graph.recomputeAll();
+      var countAfterTan = graph.objects.length;
+      assert('Intersection Tool', 'Tangent intersection creates exactly 1 point', (countAfterTan - countBeforeTan) === 1);
+
+      // 16. Pan Tool
+      var panTool = Geo.tools.controller.get('pan');
+      assert('Pan Tool', 'Pan tool is registered', !!panTool);
+      assert('Pan Tool', 'Pan tool has shortcut h and grab cursor', panTool && panTool.key === 'h' && panTool.cursor === 'grab');
+      var cam = Geo.view.camera;
+      var origCx = cam.cx, origCy = cam.cy;
+      Geo.tools.controller.activate('pan');
+      Geo.tools.controller.onPointerDown({ x: 100, y: 100 }, { button: 0 });
+      Geo.tools.controller.onPointerMove({ x: 200, y: 150 }, {});
+      Geo.tools.controller.onPointerUp({});
+      assert('Pan Tool', 'Dragging with pan tool updates camera center', Math.abs(cam.cx - (origCx - 1)) < 1e-6 && Math.abs(cam.cy - (origCy + 0.5)) < 1e-6);
+
+      // 17. Clear Canvas
+      var countBeforeClear = graph.objects.length;
+      Geo.history.snapshot();
+      Geo.ui.toolbar.clearCanvas();
+      assert('Toolbar', 'clearCanvas removes all objects from graph', graph.objects.length === 0);
+      Geo.history.undo();
+      assert('Toolbar', 'Undo after clearCanvas restores previous objects', graph.objects.length === countBeforeClear);
+
+      // 18. Greek Picker Subpanel & Case Selector
+      assert('Greek Picker', '24 lowercase and 24 uppercase Greek letters defined', labels.GREEK_LOWER_LIST.length === 24 && labels.GREEK_UPPER_LIST.length === 24);
+      var lowerGridHtml = Geo.ui.infopanel.renderGreekGridButtons('lower');
+      var upperGridHtml = Geo.ui.infopanel.renderGreekGridButtons('upper');
+      assert('Greek Picker', 'Lowercase grid renders α..ω buttons', lowerGridHtml.indexOf('data-char="α"') !== -1 && lowerGridHtml.indexOf('data-char="ω"') !== -1);
+      assert('Greek Picker', 'Uppercase grid renders Α..Ω buttons', upperGridHtml.indexOf('data-char="Α"') !== -1 && upperGridHtml.indexOf('data-char="Ω"') !== -1);
+      assert('Greek Picker', 'Subpanel and case tabs rendered in properties', segHtml.indexOf('greek-picker-subpanel') !== -1 && segHtml.indexOf('greek-case-tabs') !== -1 && segHtml.indexOf('greek-letters-grid') !== -1);
+      assert('Greek Picker', 'Uppercase Greek letters valid for point and line labels', labels.isValid('point', 'Ω_1') && labels.isValid('line', 'Γ'));
+
+      // 19. Simple Angle Tool
+      var angTool = Geo.tools.controller.get('angle');
+      assert('Angle Tool', 'Simple Angle tool is registered', !!angTool && angTool.id === 'angle' && angTool.steps.length === 3);
+      var preAngCount = graph.objects.length;
+      Geo.tools.controller.activate('angle');
+      var pArm1 = Geo.model.objects.createPoint({ kind: 'free', x: 5, y: 0 }, 'AA1');
+      var pVtx = Geo.model.objects.createPoint({ kind: 'free', x: 0, y: 0 }, 'AV');
+      var pArm2 = Geo.model.objects.createPoint({ kind: 'free', x: 0, y: 5 }, 'AA2');
+      graph.add(pArm1);
+      graph.add(pVtx);
+      graph.add(pArm2);
+      angTool.commit([pArm1, pVtx, pArm2]);
+      graph.recomputeAll();
+      var createdAngle = graph.objects[graph.objects.length - 1];
+      assert('Angle Tool', 'Angle tool creates angle object without error', createdAngle && createdAngle.type === 'angle' && createdAngle.label.text === 'α');
+      assert('Angle Tool', 'Angle geometry computed correctly (90 deg / π/2 rad)', createdAngle && createdAngle._geom && Math.abs(createdAngle._geom.sweep - Math.PI * 0.5) < 1e-4);
+
+      // 20. Angle Bisector Tool
+      var bisTool = Geo.tools.controller.get('angle_bisector');
+      assert('Angle Bisector', 'Angle bisector tool is registered with shortcut b', !!bisTool && bisTool.id === 'angle_bisector' && bisTool.key === 'b' && bisTool.steps.length === 3);
+      var bisSols = bisTool.solutions([pArm1, pVtx, pArm2]);
+      assert('Angle Bisector', 'Solutions provides 2 candidate ray directions', bisSols && bisSols.length === 2 && bisSols[0].type === 'ray' && bisSols[1].type === 'ray');
+      assert('Angle Bisector', 'Branch 0 is interior (45 deg) and branch 1 is opposite (225 deg)',
+        Math.abs(bisSols[0].dir.x - Math.SQRT1_2) < 1e-6 && Math.abs(bisSols[0].dir.y - Math.SQRT1_2) < 1e-6 &&
+        Math.abs(bisSols[1].dir.x - (-Math.SQRT1_2)) < 1e-6 && Math.abs(bisSols[1].dir.y - (-Math.SQRT1_2)) < 1e-6);
+
+      // Commit interior bisector (branch 0)
+      bisTool.commit([pArm1, pVtx, pArm2], 0);
+      graph.recomputeAll();
+      var bisObj0 = graph.objects[graph.objects.length - 1];
+      assert('Angle Bisector', 'Bisector ray 0 is created at vertex', bisObj0 && bisObj0.type === 'line' && bisObj0.extent === 'ray' && bisObj0._geom.P0.x === 0 && bisObj0._geom.P0.y === 0);
+      assert('Angle Bisector', 'Bisector ray 0 direction points interior', Math.abs(bisObj0._geom.d.x - Math.SQRT1_2) < 1e-6 && Math.abs(bisObj0._geom.d.y - Math.SQRT1_2) < 1e-6);
+
+      // Commit opposite bisector (branch 1)
+      bisTool.commit([pArm1, pVtx, pArm2], 1);
+      graph.recomputeAll();
+      var bisObj1 = graph.objects[graph.objects.length - 1];
+      assert('Angle Bisector', 'Bisector ray 1 direction points opposite', Math.abs(bisObj1._geom.d.x - (-Math.SQRT1_2)) < 1e-6 && Math.abs(bisObj1._geom.d.y - (-Math.SQRT1_2)) < 1e-6);
+
+      // Reversing ray direction
+      bisObj0.def.reverse = true;
+      graph.recomputeAll();
+      assert('Angle Bisector', 'Reversing ray direction inverts direction vector', Math.abs(bisObj0._geom.d.x - (-Math.SQRT1_2)) < 1e-6);
+
+      // 18. Default Labels: Lines, rays, segments have no auto-assigned labels
+      graph.clear();
+      var pt1 = Geo.model.objects.createPoint({ kind: 'free', x: 0, y: 0 }, 'A');
+      var pt2 = Geo.model.objects.createPoint({ kind: 'free', x: 10, y: 0 }, 'B');
+      var pt3 = Geo.model.objects.createPoint({ kind: 'free', x: 0, y: 10 }, 'C');
+      graph.add(pt1);
+      graph.add(pt2);
+      graph.add(pt3);
+
+      var lineTool = Geo.tools.controller.get('line');
+      lineTool.commit([pt1, pt2]);
+      var testLine = graph.objects[graph.objects.length - 1];
+      assert('Default Labels', 'Line has no auto-assigned label', testLine && testLine.label.text === '' && !testLine.label.visible);
+
+      var rayTool = Geo.tools.controller.get('ray');
+      rayTool.commit([pt1, pt2]);
+      var testRay = graph.objects[graph.objects.length - 1];
+      assert('Default Labels', 'Ray has no auto-assigned label', testRay && testRay.label.text === '' && !testRay.label.visible);
+
+      var segTool = Geo.tools.controller.get('segment');
+      segTool.commit([pt1, pt2]);
+      var testSeg = graph.objects[graph.objects.length - 1];
+      assert('Default Labels', 'Segment has no auto-assigned label', testSeg && testSeg.label.text === '' && !testSeg.label.visible);
+
+      var parTool = Geo.tools.controller.get('parallel');
+      parTool.commit([testLine, pt3]);
+      var testPar = graph.objects[graph.objects.length - 1];
+      assert('Default Labels', 'Parallel line has no auto-assigned label', testPar && testPar.label.text === '' && !testPar.label.visible);
+
+      assert('Default Labels', 'Angle bisector ray has no auto-assigned label', bisObj0 && bisObj0.label.text === '' && !bisObj0.label.visible);
+
+      // Points and circles still have auto-assigned labels
+      var testPtAuto = Geo.model.objects.createPoint({ kind: 'free', x: 5, y: 5 }, labels.nextAvailableLabel('point', graph.objects));
+      assert('Default Labels', 'Points still have auto-assigned labels', testPtAuto && testPtAuto.label.text.length > 0);
+      var circleTool = Geo.tools.controller.get('circle_cp');
+      circleTool.commit([pt1, pt2]);
+      var testCirc = graph.objects[graph.objects.length - 1];
+      assert('Default Labels', 'Circles still have auto-assigned labels', testCirc && testCirc.type === 'circle' && testCirc.label.text.length > 0);
+
+      // 19. Perpendicular Bisector Tool
+      var pbMath = prim.perpendicularBisector({ x: 0, y: 0 }, { x: 6, y: 0 });
+      assert('Perpendicular Bisector', 'Kernel computes bisector line through midpoint (3, 0)', pbMath && Math.abs(pbMath.P.x - 3) < 1e-9 && Math.abs(pbMath.P.y) < 1e-9);
+      assert('Perpendicular Bisector', 'Kernel bisector direction is perpendicular to segment', pbMath && Math.abs(vec.dot(pbMath.d, { x: 1, y: 0 })) < 1e-9);
+      var pbDegenerate = prim.perpendicularBisector({ x: 2, y: 3 }, { x: 2, y: 3 });
+      assert('Perpendicular Bisector', 'Degenerate points return null', pbDegenerate === null);
+
+      var pbTool = Geo.tools.controller.get('perp_bisector');
+      assert('Perpendicular Bisector', 'Tool is registered with key e and 2 steps', !!pbTool && pbTool.key === 'e' && pbTool.steps.length === 2);
+      var pbAlias = Geo.tools.controller.get('perpendicular_bisector');
+      assert('Perpendicular Bisector', 'Alias perpendicular_bisector resolves', !!pbAlias);
+
+      // Test preview
+      var pbPrev = pbTool.preview([{ _geom: { x: 0, y: 0 } }], { point: { x: 0, y: 8 } });
+      assert('Perpendicular Bisector', 'Live preview generated when 1 point picked', pbPrev && pbPrev.type === 'line' && pbPrev.extent === 'line' && Math.abs(pbPrev.p0.y - 4) < 1e-9);
+
+      // Commit tool
+      graph.clear();
+      var pbP1 = Geo.model.objects.createPoint({ kind: 'free', x: 2, y: 1 }, 'A');
+      var pbP2 = Geo.model.objects.createPoint({ kind: 'free', x: 8, y: 9 }, 'B');
+      graph.add(pbP1);
+      graph.add(pbP2);
+
+      pbTool.commit([pbP1, pbP2]);
+      graph.recomputeAll();
+      var pbObj = graph.objects[graph.objects.length - 1];
+      assert('Perpendicular Bisector', 'Created object is line with perpendicularBisector kind', pbObj && pbObj.type === 'line' && pbObj.extent === 'line' && pbObj.def.kind === 'perpendicularBisector');
+      assert('Perpendicular Bisector', 'Created line has no auto-assigned name', pbObj.label.text === '' && !pbObj.label.visible);
+
+      // Verify geometry: midpoint is (5, 5), segment vector is (6, 8)
+      var pbGeom = pbObj._geom;
+      assert('Perpendicular Bisector', 'Line passes through midpoint (5, 5)', pbGeom && Math.abs(prim.distPointToLine({ x: 5, y: 5 }, pbGeom)) < 1e-9);
+      assert('Perpendicular Bisector', 'Line is perpendicular to segment AB', pbGeom && Math.abs(vec.dot(pbGeom.d, { x: 6, y: 8 })) < 1e-9);
+
+      // Verify points on bisector line are equidistant to A and B
+      var testPtOnBis = prim.pointAtParamOnLine(pbGeom, 4.0);
+      var distA = vec.dist(testPtOnBis, pbP1._geom);
+      var distB = vec.dist(testPtOnBis, pbP2._geom);
+      assert('Perpendicular Bisector', 'Points on bisector are equidistant to A and B', Math.abs(distA - distB) < 1e-9);
+
+      // Dynamic update when moving point A
+      pbP1.def.x = 2;
+      pbP1.def.y = 9; // Now A is (2, 9), B is (8, 9) -> horizontal segment
+      graph.recomputeAll();
+      var pbGeomUpdated = pbObj._geom;
+      assert('Perpendicular Bisector', 'Bisector updates dynamically when point dragged (vertical line X=5)', pbGeomUpdated && Math.abs(pbGeomUpdated.n.y) < 1e-9 && Math.abs(pbGeomUpdated.P0.x - 5) < 1e-9);
+
+      // Render table
+      var tbody = document.getElementById('test-rows');
+      var passedCount = 0;
+      for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+        if (r.passed) passedCount++;
+        var tr = document.createElement('tr');
+        tr.innerHTML = '<td>' + (i + 1) + '</td>' +
+          '<td>' + r.category + '</td>' +
+          '<td>' + r.name + '</td>' +
+          '<td class="' + (r.passed ? 'status-pass' : 'status-fail') + '">' + (r.passed ? 'PASS' : 'FAIL') + '</td>' +
+          '<td>' + (r.details || '') + '</td>';
+        tbody.appendChild(tr);
+      }
+
+      var summaryEl = document.getElementById('summary');
+      summaryEl.innerHTML = 'Tests Completed: <strong>' + passedCount + ' / ' + results.length + ' passed</strong> ' +
+        (passedCount === results.length ? '<span class="passed-badge">(ALL PASS)</span>' : '<span class="failed-badge">(SOME FAILED)</span>');
+    })();
+  </script>
+</body>
+</html>
